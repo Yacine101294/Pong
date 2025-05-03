@@ -58,5 +58,9 @@ class Ball:
     def dessiner_balle(self, screen):
         """Dessine la balle sur l'écran"""
         pygame.draw.rect(screen, self.couleur, self.taille)
+    
+    def get_vitesse_actuelle(self):
+        """Retourne la vitesse horizontale absolue actuelle de la balle"""
+        return abs(self.vitesse_x)
         
     

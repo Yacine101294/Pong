@@ -1,0 +1,6 @@
+2025-05-03 17:13:43,741 - INFO - IA: Raquette IA initialisée à la position (565, 195)
+2025-05-03 17:13:43,741 - INFO - Jeu initialisé avec succès
+2025-05-03 17:13:43,741 - INFO - Taille de l'écran: 600x480
+2025-05-03 17:13:43,742 - INFO - Position initiale raquette gauche: <rect(20, 195, 15, 90)>
+2025-05-03 17:13:43,742 - INFO - Position initiale raquette droite: <rect(565, 195, 15, 90)>
+2025-05-03 17:13:43,742 - INFO - Position initiale balle: <rect(293, 233, 15, 15)>
