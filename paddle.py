@@ -11,12 +11,21 @@ while go:
     for event in pygame.event.get():
         pygame.display.flip()"""
 
+import random
+import logging
+
+# Récupérer le logger
+logger = logging.getLogger("PongGame")
+
 class Paddle:
-    def __init__(self, x, y, largeur=RAQUETTE_LARGEUR, hauteur=RAQUETTE_HAUTEUR, vitesse=RAQUETTE_VITESSE):  # Initialisation de la raquette avec position et dimensions
+    def __init__(self, x, y, largeur=RAQUETTE_LARGEUR, hauteur=RAQUETTE_HAUTEUR, vitesse=RAQUETTE_VITESSE, is_ai=False):  # Initialisation de la raquette avec position et dimensions
         self.rect = pygame.Rect(x, y, largeur, hauteur)  # Création du rectangle de la raquette
         self.couleur = RAQUETTE_COULEUR  # Définition de la couleur
         self.vitesse = vitesse  # Vitesse de déplacement
         self.direction = 0  # 0: immobile, -1: vers le haut, 1: vers le bas
+        self.is_ai = is_ai  # Indique si la raquette est contrôlée par l'IA
+        if is_ai:
+            logger.info(f"IA: Raquette IA initialisée à la position ({x}, {y})")
     
     def move_up(self):  # Méthode pour monter
         """Déplace la raquette vers le haut"""
@@ -32,31 +41,46 @@ class Paddle:
     
     def update(self):  # Mise à jour de la position
         """Met à jour la position de la raquette"""
+        old_y = self.rect.y
         self.rect.y += self.direction * self.vitesse  # Calcul du nouveau déplacement
         
         # Empêche la raquette de sortir de l'écran
         if self.rect.top < 0:  # Collision avec le haut
             self.rect.top = 0
+            if self.is_ai:
+                logger.debug("IA: Raquette IA bloquée par le bord supérieur")
         if self.rect.bottom > WINDOW_HEIGHT:  # Collision avec le bas
             self.rect.bottom = WINDOW_HEIGHT
+            if self.is_ai:
+                logger.debug("IA: Raquette IA bloquée par le bord inférieur")
         
     def ai_move(self, ball):
+        """Déplace la raquette IA pour suivre la balle"""
         # IA simple: suivre la balle
         # Ajout d'un petit délai/imprécision pour que l'IA ne soit pas parfaite
-        target_y = ball.rect.centery
+        target_y = ball.taille.centery
         
         # Ajouter une petite erreur aléatoire pour rendre l'IA plus humaine
-        # (optionnel, commentez si vous voulez une IA parfaite)
-        import random
-        target_y += random.randint(-30, 30)
+        error = random.randint(-30, 30)
+        target_y += error
         
-        #Décider si on mon ou descent
+        # Décider si on monte ou descend
+        old_direction = self.direction
+        
         if self.rect.centery < target_y:
-            self.rect.y += self.speed
+            self.move_down()
+            if old_direction != 1:
+                logger.debug(f"IA: Décision de descendre, cible: {target_y}, position: {self.rect.centery}, erreur: {error}")
         elif self.rect.centery > target_y:
-            self.rect.y -= self.speed
+            self.move_up()
+            if old_direction != -1:
+                logger.debug(f"IA: Décision de monter, cible: {target_y}, position: {self.rect.centery}, erreur: {error}")
+        else:
+            self.stop()
+            if old_direction != 0:
+                logger.debug(f"IA: Décision de s'arrêter, cible: {target_y}, position: {self.rect.centery}")
     
-    def draw(self, screen):  # Méthode de dessin La variable screen est un paramètre de la méthode draw de la classe Paddle. Elle représente la surface Pygame sur laquelle la raquette sera dessinée. Cette variable n'est pas définie à l'intérieur de la classe, mais elle est passée comme argument lorsque la méthode draw est appelée depuis l'extérieur.Pour utiliser cette méthode, vous devez passer la surface d'affichage principale (généralement créée avec pygame.display.set_mode()) comme paramètre. Dans votre code, vous pourriez l'utiliser comme
+    def draw(self, screen):  # Méthode de dessin
         """Dessine la raquette sur l'écran"""
         pygame.draw.rect(screen, self.couleur, self.rect)  # Dessine le rectangle
         

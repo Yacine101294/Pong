@@ -3,9 +3,36 @@ import pygame
 from constants import *
 from paddle import Paddle
 from ball import Ball
+import logging
+import os
+import datetime
+from log_window import start_log_window
 
 
 pygame.init()
+
+# Configuration du logging
+log_dir = "logs"
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+
+timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+log_file = os.path.join(log_dir, f"pong_game_{timestamp}.log")
+
+# Configuration du logger
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_file),
+        logging.StreamHandler()  # Affiche également dans la console
+    ]
+)
+logger = logging.getLogger("PongGame")
+
+# Démarrer la fenêtre de logs
+log_window = start_log_window()
+logger.addHandler(log_window.get_handler())
 
 class Game:
     """Classe qui gère la logique du jeu Pong"""
@@ -28,31 +55,28 @@ class Game:
         self.font = pygame.font.Font(None, 74)  # Taille 74 pour un grand score visible
         
         # Initialisation des raquettes
-        self.paddle_left = pygame.Rect(
+        self.paddle_left = Paddle(
             RAQUETTE_MARGE,                                 # Position X de la raquette gauche
-            WINDOW_HEIGHT // 2 - RAQUETTE_HAUTEUR // 2,     # Position Y centrée verticalement
-            RAQUETTE_LARGEUR,                               # Largeur de la raquette
-            RAQUETTE_HAUTEUR                                # Hauteur de la raquette
+            WINDOW_HEIGHT // 2 - RAQUETTE_HAUTEUR // 2      # Position Y centrée verticalement
         )
         
-        self.paddle_right = pygame.Rect(
+        self.paddle_right = Paddle(
             WINDOW_WIDTH - RAQUETTE_LARGEUR - RAQUETTE_MARGE,   # Position X de la raquette droite
             WINDOW_HEIGHT // 2 - RAQUETTE_HAUTEUR // 2,         # Position Y centrée verticalement
-            RAQUETTE_LARGEUR,                                   # Largeur de la raquette
-            RAQUETTE_HAUTEUR                                    # Hauteur de la raquette
+            is_ai=True                                          # Raquette contrôlée par l'IA
         )
         
         # Initialisation de la balle
-        self.ball = pygame.Rect(
+        self.ball = Ball(
             WINDOW_WIDTH // 2 - BALLE_TAILLE // 2,       # Position X centrée horizontalement
-            WINDOW_HEIGHT // 2 - BALLE_TAILLE // 2,      # Position Y centrée verticalement
-            BALLE_TAILLE,                                # Largeur de la balle
-            BALLE_TAILLE                                 # Hauteur de la balle (carrée)
+            WINDOW_HEIGHT // 2 - BALLE_TAILLE // 2       # Position Y centrée verticalement
         )
         
-        # Vitesse initiale de la balle
-        self.ball_speed_x = BALLE_VITESSE_INITIALE        # Vitesse horizontale initiale
-        self.ball_speed_y = BALLE_VITESSE_INITIALE        # Vitesse verticale initiale
+        logger.info("Jeu initialisé avec succès")
+        logger.info(f"Taille de l'écran: {WINDOW_WIDTH}x{WINDOW_HEIGHT}")
+        logger.info(f"Position initiale raquette gauche: {self.paddle_left.rect}")
+        logger.info(f"Position initiale raquette droite: {self.paddle_right.rect}")
+        logger.info(f"Position initiale balle: {self.ball.taille}")
     
     def draw_score(self):
         """Dessine le score sur l'écran, dans le camp respectif de chaque joueur"""
@@ -86,30 +110,84 @@ class Game:
         self.draw_score()
         
         # Dessiner les raquettes
-        pygame.draw.rect(self.screen, BLANC, self.paddle_left)
-        pygame.draw.rect(self.screen, BLANC, self.paddle_right)
+        self.paddle_left.draw(self.screen)
+        self.paddle_right.draw(self.screen)
         
         # Dessiner la balle
-        pygame.draw.rect(self.screen, BLANC, self.ball)
+        self.ball.dessiner_balle(self.screen)
         
         # Mettre à jour l'affichage
         pygame.display.flip()
-        
     
+    def update(self):
+        """Met à jour l'état du jeu"""
+        # Position avant mise à jour
+        prev_paddle_left_pos = self.paddle_left.rect.y
+        prev_paddle_right_pos = self.paddle_right.rect.y
+        prev_ball_pos = (self.ball.taille.x, self.ball.taille.y)
+        
+        # Mettre à jour la position des raquettes
+        self.paddle_left.update()
+        
+        # Mettre à jour la position de la raquette IA
+        if self.paddle_right.is_ai:
+            self.paddle_right.ai_move(self.ball)
+        self.paddle_right.update()
+        
+        # Mettre à jour la position de la balle
+        self.ball.deplacer()
+        
+        # Journaliser les déplacements
+        if prev_paddle_left_pos != self.paddle_left.rect.y:
+            logger.info(f"JOUEUR: Raquette gauche déplacée de {prev_paddle_left_pos} à {self.paddle_left.rect.y}")
+        
+        if prev_paddle_right_pos != self.paddle_right.rect.y:
+            logger.info(f"IA: Raquette droite déplacée de {prev_paddle_right_pos} à {self.paddle_right.rect.y}")
+        
+        if prev_ball_pos != (self.ball.taille.x, self.ball.taille.y):
+            logger.debug(f"BALLE: Déplacée de {prev_ball_pos} à ({self.ball.taille.x}, {self.ball.taille.y})")
+        
+        # Détecter les collisions avec les murs
+        if self.ball.detecter_collision_murs():
+            logger.info(f"COLLISION: Balle a rebondi sur un mur à la position ({self.ball.taille.x}, {self.ball.taille.y})")
+        
+        # Détecter les collisions avec les raquettes
+        if self.ball.detecter_collision_raquettes(self.paddle_left, self.paddle_right):
+            logger.info(f"COLLISION: Balle a rebondi sur une raquette à la position ({self.ball.taille.x}, {self.ball.taille.y})")
+        
+        # Détecter si un point a été marqué
+        point = self.ball.detecter_point()
+        if point == "gauche":
+            self.score_left += 1
+            logger.info(f"POINT: Joueur gauche marque un point! Score: {self.score_left}-{self.score_right}")
+            self.ball.reinitialiser(WINDOW_WIDTH // 2 - BALLE_TAILLE // 2, WINDOW_HEIGHT // 2 - BALLE_TAILLE // 2)
+        elif point == "droite":
+            self.score_right += 1
+            logger.info(f"POINT: Joueur droite (IA) marque un point! Score: {self.score_left}-{self.score_right}")
+            self.ball.reinitialiser(WINDOW_WIDTH // 2 - BALLE_TAILLE // 2, WINDOW_HEIGHT // 2 - BALLE_TAILLE // 2)
+        
     def handle_input(self):
         """Gestion des entrées"""
         keys = pygame.key.get_pressed()
         
-        #Contole du joueur 1
+        old_direction = self.paddle_left.direction
+        
+        # Contrôle du joueur 1 (raquette gauche)
         if keys[pygame.K_UP]:
             self.paddle_left.move_up()
+            if old_direction != -1:
+                logger.info("INPUT: Joueur appuie sur la touche HAUT")
         elif keys[pygame.K_DOWN]:
-            self.paddle_right.move_down()
+            self.paddle_left.move_down()
+            if old_direction != 1:
+                logger.info("INPUT: Joueur appuie sur la touche BAS")
         else:
             self.paddle_left.stop()
-            
+            if old_direction != 0:
+                logger.info("INPUT: Joueur relâche les touches directionnelles")
         
-        
+        # L'IA contrôle la raquette droite
+        # self.paddle_right.ai_move(self.ball) # À implémenter si nécessaire
     
     
     
